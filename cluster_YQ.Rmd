@@ -1,0 +1,179 @@
+---
+title: "clusters"
+output: pdf_document
+date: "2023-06-25"
+---
+
+```{r setup, include=TRUE}
+knitr::opts_chunk$set(echo = TRUE)
+#############################
+# CHANGE DESCRIPTION
+# I fit a serious clustering model by using different number of clusters 1-10 and
+# record within-cluster sum of squares (WCSS) to select the optimal number of 
+# cluster through "elbow" method. From the graph, I can clearly see that 
+# 5 should be selected as number of clusters. Then I calculate the Within-Cluster
+# Sum of Squares and the between-cluster sum of squares of 5 clusters.
+# Age and marital Status were added to perform the PCA analysis. I compare R^2 
+# values from regressing wages with PCs and all variables. 
+# By printing the PCA result and visualization, 
+# three PCs are selected and doing the comparison again. The results becomes better
+# as three PCs explained more variance of data than single PC.
+# END OF CHANGE DESCRIPTION
+
+
+# Clustering example
+library(MASS)
+library(ggplot2)
+wages<-read.csv('http://inta.gatech.s3.amazonaws.com/wage2.csv')
+subwages <-wages[,c("wage","IQ","KWW","educ","age","married")]
+# Cluster based only on a subset of the data
+cluster.results<-kmeans(subwages, 4, nstart=5)
+# Calculate clusters, using 5 different starting samples
+print(cluster.results)
+# Look at cluster results
+subwages$cluster<-as.factor(cluster.results$cluster)
+# The 'cluster' element of the results is the cluster which each data
+# point belongs
+
+ggplot(data=subwages, aes(x=educ, y=wage)) + geom_point(aes(colour=cluster))  + 
+  geom_point(data=data.frame(cluster.results$centers), colour='red', size=7)
+ggplot(data=subwages, aes(x=educ, y=IQ)) + geom_point(aes(colour=cluster)) + 
+  geom_point(data=data.frame(cluster.results$centers), colour='red', size=7)
+# We can plot the data points with colors for the different clusters.
+# The colors match up differently along different dimensions
+
+# If you want to see these plots with the data points less on top of each other,
+# 'geom_jitter' adds soem noise to each point to move them off of each other:
+ggplot(data=subwages, aes(x=educ, y=wage)) + geom_jitter(aes(colour=cluster)) + 
+  geom_point(data=data.frame(cluster.results$centers), colour='red', size=7)
+
+# When you look at these graphs, it's clear that clustering is mostly happening 
+# on wage. Why is that? How could you fix it?
+
+# Answer: The fact that clustering is predominantly occurring on the "wage" feature 
+# in the graph suggests that this particular feature is the most influential 
+# in determining the similarities or differences between data points. 
+# This can happen if the wage feature has a higher magnitude or variation compared to 
+# other features, making it more informative in differentiating data points.
+# To address this issue and achieve more balanced clustering across features, 
+# we can consider the following approaches:
+# 1. Normalize or standardize the features to ensure they have comparable scales. 
+# 2. Dimensionality Reduction
+
+
+####################
+# Standardize before doing clustering
+zscore<-function(x){
+  out<-(x - mean(x))/sd(x)
+  return(out)
+}
+subwages2<-subwages
+subwages2$cluster<-NULL
+for (col in names(subwages2)){
+  subwages2[,col]<-zscore(subwages2[,col])
+}
+# This loop standardizes the data (subtracts mean and divides by standard deviation)
+# so that the data is in z-scores
+
+cluster.results2<-kmeans(subwages2, 4, nstart=5)
+subwages$cluster2<-as.factor(cluster.results2$cluster)
+ggplot(data=subwages, aes(x=educ, y=wage)) + geom_point(aes(colour=cluster2))
+ggplot(data=subwages, aes(x=educ, y=IQ)) + geom_point(aes(colour=cluster2))
+# Plot the original data using the new clusters - note there is more of an IQ-based 
+# pattern and less a pure wages one.
+
+# Explore clusters in this data:
+# 1) What happens if you use a different number of clusters?
+# 2) How many clusters do you think there should be?
+# 3) How good a fit can you get of wages using these clusters?
+
+### Code change and answer ###
+
+wcss <- rep(0,10)
+for (k in 1:10){
+  kmeans_model = kmeans(subwages2, centers=k, nstart=5)
+  wcss[k] <- kmeans_model$tot.withinss
+}
+plot(1:10, wcss, type = "b", pch = 19, 
+     xlab = "Number of Clusters", ylab = "Within-Cluster Sum of Squares (WCSS)")
+
+cluster.results3<-kmeans(subwages2, 5, nstart=5)
+subwages$cluster3<-as.factor(cluster.results3$cluster)
+ggplot(data=subwages, aes(x=educ, y=wage)) + geom_point(aes(colour=cluster3))
+ggplot(data=subwages, aes(x=educ, y=IQ)) + geom_point(aes(colour=cluster3))
+cluster.results3$tot.withinss
+cluster.results3$betweenss
+
+# I am trying to use elbow method to determine optimal number of clusters. 
+# This method involves plotting the within-cluster sum of squares (WCSS) against 
+# the number of clusters. As the number of clusters increases, the WCSS tends 
+# to decrease, since smaller clusters can better fit the data. 
+# The idea is to identify the "elbow" point on the plot, which represents a 
+# significant decrease in WCSS. This point suggests the optimal number of 
+# clusters, as adding more clusters beyond the elbow may not provide substantial 
+# benefits. From the graph, I can clearly see that after number of cluster 5, the
+# WCSS do not decrease significantly, so the optimal number of cluster is selected
+# to be 5. 
+
+# Clustering itself does not explicitly aim to fit the wages 
+# but rather focuses on grouping similar data points together based on their
+# feature similarities. But we can analyze the relationship between the cluster 
+# assignments and the wages to assess the fit. The Within-Cluster Sum of Squares 
+# of 5 cluster is 2528.526. The between-cluster sum of squares is 3075.474.
+
+
+##########
+# Principal Components Analysis
+wages<-read.csv('http://inta.gatech.s3.amazonaws.com/wage2.csv')
+subwages <-wages[,c("IQ","KWW","educ")]
+# Create a subset of wages with just a few columns
+principal.components <- prcomp(subwages, retx=T, center=T, scale=T)
+# Do a principal components analysis on just the columns in subwages
+print(principal.components$rotation) # The weights on each variable
+summary(principal.components) # The proportion of variance explained
+plot(principal.components) # Graphical depiction of proportion of variance
+sw <- cbind(wages,data.frame(principal.components$x))
+# Add the new principal components as columns to a new data frame, sw
+# (New so we don't muck up going back and running other stuff on wages now)
+one.pc <- lm(wage ~ PC1, data= sw)
+all.variables <- lm(wage ~ IQ + KWW + educ, data= sw)
+summary(one.pc)
+summary(all.variables)
+# How much better does having three variables do compared to the one principal
+# component here? (Look at R^2)
+
+### Having three variables generate R^2 value 0.1657 while one principal
+## component generate R^2 value 0.1636.
+
+# Try to replicate this using more variables, including perhaps age and marital 
+# Status. Would you see the same thing?
+
+
+subwages2 <-wages[,c("IQ","KWW","educ","age","married")]
+# Create a subset of wages with just a few columns
+principal.components2 <- prcomp(subwages2, retx=T, center=T, scale=T)
+# Do a principal components analysis on just the columns in subwages
+print(principal.components2$rotation) # The weights on each variable
+summary(principal.components2) # The proportion of variance explained
+plot(principal.components2) # Graphical depiction of proportion of variance
+sw2 <- cbind(wages,data.frame(principal.components2$x))
+# Add the new principal components as columns to a new data frame, sw
+# (New so we don't muck up going back and running other stuff on wages now)
+one.pc2 <- lm(wage ~ PC1, data= sw2)
+all.variables2 <- lm(wage ~ IQ + KWW + educ+age+married, data= sw2)
+summary(one.pc2)
+summary(all.variables2)
+
+one.pc3<- lm(wage ~ PC1+PC2+PC3, data= sw2)
+summary(one.pc3)
+summary(all.variables2)
+
+### By adding age and married and perform PCA and select PC1 as only variable
+# as a predictor, it generates slightly worse R^2 compared to including all 
+# 5 variables (0.1758 vs 0.1911). It is because PC1 only demonstrate 38.42% of 
+# variance, it could be better (very close) if we select 3 PCs with "elbow" method 
+# (0.1883 vs 0.1911).
+
+
+```
+
